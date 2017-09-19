@@ -280,7 +280,7 @@ class JWT
      */
     public function checkProvider($provider)
     {
-        if (is_null($prv = $this->payload()->get('prv'))) {
+        if (($prv = $this->payload()->get('prv')) === null) {
             return true;
         }
 

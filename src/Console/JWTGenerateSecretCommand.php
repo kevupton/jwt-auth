@@ -37,7 +37,7 @@ class JWTGenerateSecretCommand extends Command
      *
      * @return void
      */
-    public function fire()
+    public function handle()
     {
         $key = Str::random(32);
 
@@ -47,23 +47,26 @@ class JWTGenerateSecretCommand extends Command
             return;
         }
 
-        if (file_exists($path = base_path('.env')) === false) {
+        if (file_exists($path = $this->envPath()) === false) {
             return $this->displayKey($key);
         }
 
-        // check if there is already a secret set first
-        if (Str::contains(file_get_contents($path), 'JWT_SECRET') === false) {
-            file_put_contents($path, PHP_EOL."JWT_SECRET=$key", FILE_APPEND);
-        } elseif ($this->isConfirmed() === false) {
+        if ($this->isConfirmed() === false) {
             $this->comment('Phew... No changes were made to your secret key.');
 
             return;
         }
 
-        // let's be sure you want to do this, unless you already told us to force it
-        file_put_contents($path, str_replace(
-            'JWT_SECRET='.$this->laravel['config']['jwt.secret'], 'JWT_SECRET='.$key, file_get_contents($path)
-        ));
+        if (Str::contains(file_get_contents($path), 'JWT_SECRET') === false) {
+            // update existing entry
+            file_put_contents($path, PHP_EOL."JWT_SECRET=$key", FILE_APPEND);
+        } else {
+            // create new entry
+            file_put_contents($path, str_replace(
+                'JWT_SECRET='.$this->laravel['config']['jwt.secret'],
+                'JWT_SECRET='.$key, file_get_contents($path)
+            ));
+        }
 
         $this->displayKey($key);
     }
@@ -83,16 +86,28 @@ class JWTGenerateSecretCommand extends Command
     }
 
     /**
-     * Check if the modification is conformed.
+     * Check if the modification is confirmed.
      *
      * @return bool
      */
     protected function isConfirmed()
     {
-        if ($this->option('force') === true) {
-            return true;
+        return $this->option('force') ? true : $this->confirm(
+            'This will invalidate all existing tokens. Are you sure you want to override the secret key?'
+        );
+    }
+
+    /**
+     * Get the .env file path.
+     *
+     * @return string
+     */
+    protected function envPath()
+    {
+        if (method_exists($this->laravel, 'environmentFilePath')) {
+            return $this->laravel->environmentFilePath();
         }
 
-        return $this->confirm('This will invalidate all existing tokens. Are you sure you want to override the secret key?');
+        return $this->laravel->basePath('.env');
     }
 }
